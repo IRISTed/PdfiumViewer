@@ -7,6 +7,8 @@ using System.Drawing.Printing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace PdfiumViewer
 {
@@ -143,7 +145,8 @@ namespace PdfiumViewer
             var size = PageSizes[page];
 
             if (useFDIB)
-                return RenderToFDIB(page, (int)size.Width, (int)size.Height, dpiX, dpiY, forPrinting);
+                return null;    // types don't match anymore
+                //return RenderToFDIB(page, (int)size.Width, (int)size.Height, dpiX, dpiY, forPrinting);
             else
                 return Render(page, (int)size.Width, (int)size.Height, dpiX, dpiY, forPrinting);
         }
@@ -187,7 +190,7 @@ namespace PdfiumViewer
                     var oldBitmap = NativeMethods.SelectObject(dc, bitmap);
                     try
                     {
-                        var brush = NativeMethods.CreateSolidBrush(ColorTranslator.ToWin32(Color.White));
+                        var brush = NativeMethods.CreateSolidBrush(ColorTranslator.ToWin32(System.Drawing.Color.White));
                         try
                         {
                             var oldBrush = NativeMethods.SelectObject(dc, brush);
@@ -242,18 +245,18 @@ namespace PdfiumViewer
         }
 
         /// <summary>
-        /// Renders a page of the PDF document to a Bitmap using FDIB (Foxit Device Independent Bitmap)
+        /// Renders a page of the PDF document to a BitmapSource using FDIB (Foxit Device Independent Bitmap)
         /// </summary>
         /// <param name="page">Number of the page to render.</param>        
         /// <param name="dpiX">Horizontal DPI.</param>
         /// <param name="dpiY">Vertical DPI.</param>
         /// <param name="bounds">Bounds to render the page in.</param>
         /// <param name="forPrinting">Render the page for printing.</param>
-        /// <returns>A Bitmap drawn with the given page of the PDF</returns>
-        public Bitmap RenderToFDIB(int page, int width, int height, float dpiX, float dpiY, bool forPrinting)
+        /// <returns>A BitmapSource drawn with the given page of the PDF</returns>
+        public BitmapSource RenderToBitmapSource(int page, int width, int height, float dpiX, float dpiY, bool forPrinting)
         {
             IntPtr bitmapHandle = IntPtr.Zero;
-            Bitmap bitmap = null;
+            BitmapSource result = null;
 
             if (_disposed)
                 throw new ObjectDisposedException(GetType().Name);
@@ -261,11 +264,7 @@ namespace PdfiumViewer
             try
             {
                 bitmapHandle = NativeMethods.FPDFBitmap_Create(width, height, 1);
-                //NativeMethods.FPDFBitmap_FillRect(bitmapHandle, 0, 0, bounds.Width, bounds.Height, 255, 255, 255, 255);
-
-                IntPtr brush = NativeMethods.CreateSolidBrush((int)ColorTranslator.ToWin32(Color.Orange));
-                NativeMethods.FillRgn(bitmapHandle, NativeMethods.CreateRectRgn(0, 0, width, height), brush);
-                NativeMethods.DeleteObject(brush);
+                NativeMethods.FPDFBitmap_FillRect(bitmapHandle, 0, 0, width, height, new FPDFColor(0xFFFFFFFF));
 
                 bool success = _file.RenderPDFPageToBitmap(
                     page,
@@ -284,9 +283,21 @@ namespace PdfiumViewer
                     throw new Win32Exception();
                 else
                 {
+                    IntPtr pixelsData = NativeMethods.FPDFBitmap_GetBuffer(bitmapHandle);
                     byte[] bytes = new byte[width * height * 4];
-                    Marshal.Copy(bitmapHandle, bytes, 0, bytes.Length);
-                    bitmap = BitmapHelper.Convert_BGRA_TO_ARGB(bytes, width, height);
+                    Marshal.Copy(pixelsData, bytes, 0, bytes.Length);
+
+                    result = BitmapSource.Create(
+                            width,
+                            height,
+                            dpiX,
+                            dpiY,
+                            PixelFormats.Bgra32,
+                            null /* palette */,
+                            bytes,
+                            width * 4 /* stride */);
+
+                    result.Freeze();
                 }
             }
             catch (Exception e)
@@ -297,7 +308,7 @@ namespace PdfiumViewer
                 NativeMethods.FPDFBitmap_Destroy(bitmapHandle);
             }
 
-            return bitmap;
+            return result;
         }
 
         /// <summary>

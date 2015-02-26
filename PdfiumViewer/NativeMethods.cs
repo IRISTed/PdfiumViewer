@@ -128,7 +128,10 @@ namespace PdfiumViewer
         public static extern IntPtr FPDFBitmap_Create(int width, int height, int alpha);
 
         [DllImport("pdfium.dll")]
-        public static extern void FPDFBitmap_FillRect(IntPtr bitmapHandle, int left, int top, int width, int height, int red, int green, int blue, int alpha);
+        internal static extern void FPDFBitmap_FillRect(IntPtr bitmapHandle, int left, int top, int width, int height, FPDFColor color);
+
+        [DllImport("pdfium.dll")]
+        internal static extern IntPtr FPDFBitmap_GetBuffer(IntPtr bitmapHandle);
 
         [DllImport("pdfium.dll")]
         public static extern int FPDF_GetPageSizeByIndex(IntPtr document, int page_index, out double width, out double height);
